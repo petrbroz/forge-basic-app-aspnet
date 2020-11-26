@@ -4,6 +4,7 @@
     viewer.setTheme('light-theme');
     const urn = window.location.hash ? window.location.hash.substr(1) : null;
     setupModelSelection(viewer, urn);
+    setupModelUpload(viewer);
 });
 
 /**
@@ -52,6 +53,45 @@ async function setupModelSelection(viewer, selectedUrn) {
     if (!viewer.model && models.value) {
         loadModel(viewer, models.value);
     }
+}
+
+/**
+ * Initializes model upload UI.
+ * @async
+ * @param {GuiViewer3D} viewer Forge Viewer instance.
+ */
+async function setupModelUpload(viewer) {
+    const button = document.getElementById('upload');
+    const input = document.getElementById('input');
+    button.addEventListener('click', async function () {
+        input.click();
+    });
+    input.addEventListener('change', async function () {
+        if (input.files.length !== 1) {
+            return;
+        }
+        const file = input.files[0];
+        let data = new FormData();
+        data.append('model-name', file.name);
+        data.append('model-file', file);
+        // When uploading a zip file, ask for the main design file in the archive
+        if (file.name.endsWith('.zip')) {
+            const entrypoint = window.prompt('Please enter the filename of the main design inside the archive.');
+            data.append('model-zip-entrypoint', entrypoint);
+        }
+        button.setAttribute('disabled', 'true');
+        button.innerText = 'Uploading ...';
+        const resp = await fetch('/api/models', { method: 'POST', body: data });
+        if (resp.ok) {
+            input.value = '';
+            setupModelSelection(viewer);
+        } else {
+            alert('Could not upload model. See the console for more details.');
+            console.error(await resp.text());
+        }
+        button.innerText = '+';
+        button.removeAttribute('disabled');
+    });
 }
 
 /**

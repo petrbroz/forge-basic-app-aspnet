@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Autodesk.Forge;
@@ -30,6 +31,7 @@ namespace BasicForgeApp.Services
     {
         Task<Auth> GetPublicToken();
         Task<List<Model>> ListModels();
+        Task<Model> UploadModel(string objectKey, Stream body, string zipEntrypoint);
     }
 
     public class Forge : IForgeService
@@ -118,6 +120,39 @@ namespace BasicForgeApp.Services
                 models.Add(new Model { Name = obj.Value.objectKey, URN = Base64Encode(obj.Value.objectId) });
             }
             return models;
+        }
+
+        public async Task<Model> UploadModel(string objectKey, Stream body, string zipEntrypoint)
+        {
+            await EnsureBucketExists(bucketKey);
+            var auth = await GetAccessToken(INTERNAL_TOKEN_SCOPES);
+            var objectsApi = new ObjectsApi();
+            objectsApi.Configuration.AccessToken = auth.AccessToken;
+            var response = await objectsApi.UploadObjectAsync(bucketKey, objectKey, (int)body.Length, body);
+            var model = new Model { Name = response.objectKey, URN = Base64Encode(response.objectId) };
+
+            var derivativesApi = new DerivativesApi();
+            derivativesApi.Configuration.AccessToken = auth.AccessToken;
+            var payload = new JobPayload();
+            payload.Input = new JobPayloadInput(model.URN);
+            payload.Output = new JobPayloadOutput(new List<JobPayloadItem>());
+            payload.Output.Formats.Add(
+                new JobPayloadItem(
+                    JobPayloadItem.TypeEnum.Svf,
+                    new List<JobPayloadItem.ViewsEnum>
+                    {
+                        JobPayloadItem.ViewsEnum._2d,
+                        JobPayloadItem.ViewsEnum._3d
+                    }
+                )
+            );
+            if (!string.IsNullOrEmpty(zipEntrypoint))
+            {
+                payload.Input.CompressedUrn = true;
+                payload.Input.RootFilename = zipEntrypoint;
+            }
+            await derivativesApi.TranslateAsync(payload);
+            return model;
         }
     }
 }
