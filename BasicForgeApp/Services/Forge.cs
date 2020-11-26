@@ -60,29 +60,28 @@ namespace BasicForgeApp.Services
 
         private async Task<Auth> GetAccessToken(Scope[] scopes)
         {
+            Auth cachedAuth;
             var cacheKey = string.Join("+", from scope in scopes select scope.ToString());
-            var auth = new Auth();
-            if (authCache.TryGetValue(cacheKey, out auth) && auth.ExpiresAt < DateTime.Now)
-            {
-                auth.ExpiresIn = (long)DateTime.Now.Subtract(auth.ExpiresAt).TotalSeconds;
-            }
-            else
+            if (!authCache.TryGetValue(cacheKey, out cachedAuth) || cachedAuth.ExpiresAt >= DateTime.Now)
             {
                 var client = new TwoLeggedApi();
                 var response = await client.AuthenticateAsync(clientId, clientSecret, "client_credentials", scopes);
-                auth = new Auth
+                cachedAuth = new Auth
                 {
                     AccessToken = response.access_token,
                     ExpiresIn = response.expires_in,
                     ExpiresAt = DateTime.Now.AddSeconds(response.expires_in)
                 };
                 if (authCache.ContainsKey(cacheKey))
-                {
                     authCache.Remove(cacheKey);
-                }
-                authCache.Add(cacheKey, auth);
+                authCache.Add(cacheKey, cachedAuth);
             }
-            return auth;
+            return new Auth
+            {
+                AccessToken = cachedAuth.AccessToken,
+                ExpiresAt = cachedAuth.ExpiresAt,
+                ExpiresIn = (long)cachedAuth.ExpiresAt.Subtract(DateTime.Now).TotalSeconds
+            };
         }
 
         private async Task EnsureBucketExists(string bucketKey)
@@ -94,25 +93,22 @@ namespace BasicForgeApp.Services
             foreach (KeyValuePair<string, dynamic> bucket in new DynamicDictionaryItems(buckets.items))
             {
                 if (bucket.Value.bucketKey == bucketKey)
-                {
                     return;
-                }
             }
             await client.CreateBucketAsync(new PostBucketsPayload { BucketKey = bucketKey, PolicyKey = PostBucketsPayload.PolicyKeyEnum.Temporary });
         }
 
         public async Task<Auth> GetPublicToken()
         {
-            var auth = await GetAccessToken(PUBLIC_TOKEN_SCOPES);
-            return auth;
+            return await GetAccessToken(PUBLIC_TOKEN_SCOPES);
         }
 
         public async Task<List<Model>> ListModels()
         {
             await EnsureBucketExists(bucketKey);
-            var auth = await GetAccessToken(INTERNAL_TOKEN_SCOPES);
+
             var client = new ObjectsApi();
-            client.Configuration.AccessToken = auth.AccessToken;
+            client.Configuration.AccessToken = (await GetAccessToken(INTERNAL_TOKEN_SCOPES)).AccessToken;
             var objects = await client.GetObjectsAsync(bucketKey, 100);
             var models = new List<Model> { };
             foreach (KeyValuePair<string, dynamic> obj in new DynamicDictionaryItems(objects.items))
@@ -125,25 +121,23 @@ namespace BasicForgeApp.Services
         public async Task<Model> UploadModel(string objectKey, Stream body, string zipEntrypoint)
         {
             await EnsureBucketExists(bucketKey);
-            var auth = await GetAccessToken(INTERNAL_TOKEN_SCOPES);
+
+            // Upload object
             var objectsApi = new ObjectsApi();
-            objectsApi.Configuration.AccessToken = auth.AccessToken;
+            objectsApi.Configuration.AccessToken = (await GetAccessToken(INTERNAL_TOKEN_SCOPES)).AccessToken;
             var response = await objectsApi.UploadObjectAsync(bucketKey, objectKey, (int)body.Length, body);
             var model = new Model { Name = response.objectKey, URN = Base64Encode(response.objectId) };
 
+            // Start object translation
             var derivativesApi = new DerivativesApi();
-            derivativesApi.Configuration.AccessToken = auth.AccessToken;
+            derivativesApi.Configuration.AccessToken = (await GetAccessToken(INTERNAL_TOKEN_SCOPES)).AccessToken;
             var payload = new JobPayload();
             payload.Input = new JobPayloadInput(model.URN);
             payload.Output = new JobPayloadOutput(new List<JobPayloadItem>());
             payload.Output.Formats.Add(
                 new JobPayloadItem(
                     JobPayloadItem.TypeEnum.Svf,
-                    new List<JobPayloadItem.ViewsEnum>
-                    {
-                        JobPayloadItem.ViewsEnum._2d,
-                        JobPayloadItem.ViewsEnum._3d
-                    }
+                    new List<JobPayloadItem.ViewsEnum> { JobPayloadItem.ViewsEnum._2d, JobPayloadItem.ViewsEnum._3d }
                 )
             );
             if (!string.IsNullOrEmpty(zipEntrypoint))

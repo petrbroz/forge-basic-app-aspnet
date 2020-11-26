@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using BasicForgeApp.Services;
 
@@ -22,8 +19,7 @@ namespace BasicForgeApp.Controllers
         [HttpGet("token")]
         public async Task<ActionResult<Auth>> Get()
         {
-            var auth = await _forge.GetPublicToken();
-            return auth;
+            return await _forge.GetPublicToken();
         }
     }
 }

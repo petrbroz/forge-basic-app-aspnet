@@ -80,7 +80,7 @@ async function setupModelUpload(viewer) {
             data.append('model-zip-entrypoint', entrypoint);
         }
         button.setAttribute('disabled', 'true');
-        button.innerText = 'Uploading ...';
+        button.innerText = '...';
         const resp = await fetch('/api/models', { method: 'POST', body: data });
         if (resp.ok) {
             input.value = '';
