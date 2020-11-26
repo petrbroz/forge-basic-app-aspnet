@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.28307.779
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ForgeBasicApp", "ForgeBasicApp\ForgeBasicApp.csproj", "{1B2090EB-7C1F-44F7-A9EF-6858C061A743}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{1B2090EB-7C1F-44F7-A9EF-6858C061A743}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1B2090EB-7C1F-44F7-A9EF-6858C061A743}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1B2090EB-7C1F-44F7-A9EF-6858C061A743}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1B2090EB-7C1F-44F7-A9EF-6858C061A743}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {73D3B823-ACEA-4870-86A6-CBC227459B91}
+	EndGlobalSection
+EndGlobal
