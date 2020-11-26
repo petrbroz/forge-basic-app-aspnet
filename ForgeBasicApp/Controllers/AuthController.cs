@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using BasicForgeApp.Services;
 
-namespace ForgeMarkupPDF.Controllers
+namespace BasicForgeApp.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
