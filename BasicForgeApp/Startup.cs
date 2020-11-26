@@ -28,7 +28,8 @@ namespace BasicForgeApp
             services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_1);
             var clientId = Configuration.GetValue<string>("ForgeClientID");
             var clientSecret = Configuration.GetValue<string>("ForgeClientSecret");
-            services.AddSingleton<IForgeService, Forge>(_ => new Forge(clientId, clientSecret));
+            var bucketKey = Configuration.GetValue<string>("ForgeBucket");
+            services.AddSingleton<IForgeService, Forge>(_ => new Forge(clientId, clientSecret, bucketKey));
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

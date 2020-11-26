@@ -37,11 +37,13 @@ namespace BasicForgeApp.Services
 
         private readonly string clientId;
         private readonly string clientSecret;
+        private readonly string bucketKey;
 
-        public Forge(string _clientId, string _clientSecret)
+        public Forge(string _clientId, string _clientSecret, string _bucketKey)
         {
             clientId = _clientId;
             clientSecret = _clientSecret;
+            bucketKey = _bucketKey;
         }
 
         private static string Base64Encode(string str)
@@ -57,6 +59,22 @@ namespace BasicForgeApp.Services
             return new Auth { AccessToken = auth.access_token, ExpiresIn = auth.expires_in };
         }
 
+        private async Task EnsureBucketExists(string bucketKey)
+        {
+            var auth = await GetAccessToken(INTERNAL_TOKEN_SCOPES);
+            var client = new BucketsApi();
+            client.Configuration.AccessToken = auth.AccessToken;
+            var buckets = await client.GetBucketsAsync();
+            foreach (KeyValuePair<string, dynamic> bucket in new DynamicDictionaryItems(buckets.items))
+            {
+                if (bucket.Value.bucketKey == bucketKey)
+                {
+                    return;
+                }
+            }
+            await client.CreateBucketAsync(new PostBucketsPayload { BucketKey = bucketKey, PolicyKey = PostBucketsPayload.PolicyKeyEnum.Temporary });
+        }
+
         public async Task<Auth> GetPublicToken()
         {
             var auth = await GetAccessToken(PUBLIC_TOKEN_SCOPES);
@@ -65,10 +83,11 @@ namespace BasicForgeApp.Services
 
         public async Task<List<Model>> ListModels()
         {
+            await EnsureBucketExists(bucketKey);
             var auth = await GetAccessToken(INTERNAL_TOKEN_SCOPES);
             var client = new ObjectsApi();
             client.Configuration.AccessToken = auth.AccessToken;
-            var objects = await client.GetObjectsAsync("forge-basic-app-bucket", 100);
+            var objects = await client.GetObjectsAsync(bucketKey, 100);
             var models = new List<Model> { };
             foreach (KeyValuePair<string, dynamic> obj in new DynamicDictionaryItems(objects.items))
             {
