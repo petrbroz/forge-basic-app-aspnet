@@ -14,6 +14,8 @@ namespace BasicForgeApp.Services
         public string AccessToken { get; set; }
         [JsonProperty("expires_in")]
         public long ExpiresIn { get; set; }
+        [JsonProperty("expires_at")]
+        public DateTime ExpiresAt { get; set; }
     }
 
     public class Model
@@ -38,12 +40,14 @@ namespace BasicForgeApp.Services
         private readonly string clientId;
         private readonly string clientSecret;
         private readonly string bucketKey;
+        private readonly Dictionary<string, Auth> authCache;
 
         public Forge(string _clientId, string _clientSecret, string _bucketKey)
         {
             clientId = _clientId;
             clientSecret = _clientSecret;
             bucketKey = _bucketKey;
+            authCache = new Dictionary<string, Auth>();
         }
 
         private static string Base64Encode(string str)
@@ -54,9 +58,29 @@ namespace BasicForgeApp.Services
 
         private async Task<Auth> GetAccessToken(Scope[] scopes)
         {
-            var client = new TwoLeggedApi();
-            dynamic auth = await client.AuthenticateAsync(clientId, clientSecret, "client_credentials", scopes);
-            return new Auth { AccessToken = auth.access_token, ExpiresIn = auth.expires_in };
+            var cacheKey = string.Join("+", from scope in scopes select scope.ToString());
+            var auth = new Auth();
+            if (authCache.TryGetValue(cacheKey, out auth) && auth.ExpiresAt < DateTime.Now)
+            {
+                auth.ExpiresIn = (long)DateTime.Now.Subtract(auth.ExpiresAt).TotalSeconds;
+            }
+            else
+            {
+                var client = new TwoLeggedApi();
+                var response = await client.AuthenticateAsync(clientId, clientSecret, "client_credentials", scopes);
+                auth = new Auth
+                {
+                    AccessToken = response.access_token,
+                    ExpiresIn = response.expires_in,
+                    ExpiresAt = DateTime.Now.AddSeconds(response.expires_in)
+                };
+                if (authCache.ContainsKey(cacheKey))
+                {
+                    authCache.Remove(cacheKey);
+                }
+                authCache.Add(cacheKey, auth);
+            }
+            return auth;
         }
 
         private async Task EnsureBucketExists(string bucketKey)
