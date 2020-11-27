@@ -1,10 +1,34 @@
 ﻿Autodesk.Viewing.Initializer({ getAccessToken }, async function () {
-    const viewer = new Autodesk.Viewing.GuiViewer3D(document.getElementById('preview'));
+    const config = { extensions: ['Autodesk.Viewing.MarkupsCore', 'Autodesk.Viewing.MarkupsGui'] };
+    const viewer = new Autodesk.Viewing.GuiViewer3D(document.getElementById('preview'), config);
     viewer.start();
     viewer.setTheme('light-theme');
-    const urn = window.location.hash ? window.location.hash.substr(1) : null;
-    setupModelSelection(viewer, urn);
-    setupModelUpload(viewer);
+    await viewer.loadExtension('Autodesk.PDF');
+    viewer.loadModel('/sample.pdf', { page: 1 });
+
+    // On the "bake" button click, send markups to our server and wait for results
+    document.getElementById('bake').addEventListener('click', async function () {
+        const markupsExt = viewer.getExtension('Autodesk.Viewing.MarkupsCore');
+        const metadata = viewer.model.getData().metadata;
+        let data = new FormData();
+        data.append('page_number', 1);
+        data.append('page_width', metadata.page_dimensions.page_width);
+        data.append('page_height', metadata.page_dimensions.page_height);
+        data.append('page_units', metadata.page_dimensions.page_units);
+        data.append('markups', markupsExt.generateData());
+        const resp = await fetch('/api/markups', {
+            method: 'POST',
+            body: data
+        });
+        if (resp.ok) {
+            const pdf = await resp.blob();
+            const url = window.URL.createObjectURL(pdf);
+            window.open(url, 'sample.pdf');
+        } else {
+            alert('Could not add markups into the PDF. See the console for more details.');
+            console.error(await resp.text());
+        }
+    });
 });
 
 /**
@@ -21,92 +45,4 @@ async function getAccessToken(callback) {
         alert('Could not obtain access token. See the console for more details.');
         console.error(await resp.text());
     }
-}
-
-/**
- * Initializes model selection UI. Can be called repeatedly to refresh the selection.
- * @async
- * @param {GuiViewer3D} viewer Forge Viewer instance.
- * @param {string} [selectedUrn] Optional model URN to mark as selected.
- */
-async function setupModelSelection(viewer, selectedUrn) {
-    const models = document.getElementById('models');
-    models.setAttribute('disabled', 'true');
-    models.innerHTML = '';
-    const resp = await fetch('/api/models');
-    if (resp.ok) {
-        for (const model of await resp.json()) {
-            const option = document.createElement('option');
-            option.innerText = model.name;
-            option.setAttribute('value', model.urn);
-            if (model.urn === selectedUrn) {
-                option.setAttribute('selected', 'true');
-            }
-            models.appendChild(option);
-        }
-    } else {
-        alert('Could not list models. See the console for more details.');
-        console.error(await resp.text());
-    }
-    models.removeAttribute('disabled');
-    models.onchange = () => loadModel(viewer, models.value);
-    if (!viewer.model && models.value) {
-        loadModel(viewer, models.value);
-    }
-}
-
-/**
- * Initializes model upload UI.
- * @async
- * @param {GuiViewer3D} viewer Forge Viewer instance.
- */
-async function setupModelUpload(viewer) {
-    const button = document.getElementById('upload');
-    const input = document.getElementById('input');
-    button.addEventListener('click', async function () {
-        input.click();
-    });
-    input.addEventListener('change', async function () {
-        if (input.files.length !== 1) {
-            return;
-        }
-        const file = input.files[0];
-        let data = new FormData();
-        data.append('model-name', file.name);
-        data.append('model-file', file);
-        // When uploading a zip file, ask for the main design file in the archive
-        if (file.name.endsWith('.zip')) {
-            const entrypoint = window.prompt('Please enter the filename of the main design inside the archive.');
-            data.append('model-zip-entrypoint', entrypoint);
-        }
-        button.setAttribute('disabled', 'true');
-        button.innerText = '...';
-        const resp = await fetch('/api/models', { method: 'POST', body: data });
-        if (resp.ok) {
-            input.value = '';
-            setupModelSelection(viewer);
-        } else {
-            alert('Could not upload model. See the console for more details.');
-            console.error(await resp.text());
-        }
-        button.innerText = '+';
-        button.removeAttribute('disabled');
-    });
-}
-
-/**
- * Loads specific model into the viewer.
- * @param {Autodesk.Viewing.GuiViewer3D} viewer Instance of the viewer to load the model into.
- * @param {string} urn URN (base64-encoded object ID) of the model to be loaded.
- */
-function loadModel(viewer, urn) {
-    function onDocumentLoadSuccess(doc) {
-        viewer.loadDocumentNode(doc, doc.getRoot().getDefaultGeometry());
-    }
-    function onDocumentLoadFailure(code, message) {
-        alert('Could not load model. See the console for more details.');
-        console.error(message);
-    }
-    window.location.hash = urn;
-    Autodesk.Viewing.Document.load('urn:' + urn, onDocumentLoadSuccess, onDocumentLoadFailure);
 }
